@@ -1,0 +1,39 @@
+name: Auto Rebase Upstream
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # 매주 일요일 자정에 자동 실행 (주기 변경 가능)
+  workflow_dispatch: # GitHub 웹 UI에서 수동으로 버튼을 눌러 실행 가능하게 함
+
+permissions:
+  contents: write # 강제 푸시(Force push)를 위한 권한
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: custom-patch # 작업할 내 브랜치
+          fetch-depth: 0    # Rebase를 위해 전체 히스토리를 가져옴
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add Upstream and Fetch
+        run: |
+          git remote add upstream https://github.com/rustdesk/rustdesk.git
+          git fetch upstream master
+
+      - name: Perform Rebase
+        run: |
+          # upstream/master 위로 내 custom-patch의 커밋들을 재배치
+          git rebase upstream/master
+          
+      - name: Force Push
+        if: success() # Rebase가 충돌 없이 성공했을 때만 Push
+        run: |
+          git push --force origin custom-patch
