@@ -1,6 +1,9 @@
 name: Flutter Nightly Build
 
 on:
+  push:                  # <== 추가 (푸시될 때 동작)
+    branches:            # <== 추가 
+      - custom-patch     # <== 추가 (custom-patch 브랜치에 변경사항이 생기면)
   schedule:
     # schedule build every night
     - cron: "0 0 * * *"
