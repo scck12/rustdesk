@@ -2,11 +2,11 @@ name: Auto Rebase Upstream
 
 on:
   schedule:
-    - cron: '0 0 * * 0' # ¸ÅÁÖ ÀÏ¿äÀÏ ÀÚÁ¤¿¡ ÀÚµ¿ ½ÇÇà (ÁÖ±â º¯°æ °¡´É)
-  workflow_dispatch: # GitHub À¥ UI¿¡¼­ ¼öµ¿À¸·Î ¹öÆ°À» ´­·¯ ½ÇÇà °¡´ÉÇÏ°Ô ÇÔ
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
 
 permissions:
-  contents: write # °­Á¦ Çª½Ã(Force push)¸¦ À§ÇÑ ±ÇÇÑ
+  contents: write
 
 jobs:
   rebase:
@@ -15,9 +15,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: custom-patch # ÀÛ¾÷ÇÒ ³» ºê·£Ä¡
-          fetch-depth: 0    # Rebase¸¦ À§ÇØ ÀüÃ¼ È÷½ºÅä¸®¸¦ °¡Á®¿È
-          token: ${{ secrets.PAT_TOKEN }} # ÀÌ ÇÑ ÁÙÀ» Ãß°¡ÇÕ´Ï´Ù.
+          ref: custom-patch
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }} # ë¹Œë“œ íŠ¸ë¦¬ê±°ë¥¼ ìœ„í•œ PAT í† í°
 
       - name: Configure Git
         run: |
@@ -31,10 +31,9 @@ jobs:
 
       - name: Perform Rebase
         run: |
-          # upstream/master À§·Î ³» custom-patchÀÇ Ä¿¹ÔµéÀ» Àç¹èÄ¡
           git rebase upstream/master
           
       - name: Force Push
-        if: success() # Rebase°¡ Ãæµ¹ ¾øÀÌ ¼º°øÇßÀ» ¶§¸¸ Push
+        if: success()
         run: |
           git push --force origin custom-patch
