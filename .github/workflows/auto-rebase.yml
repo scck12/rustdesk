@@ -17,6 +17,7 @@ jobs:
         with:
           ref: custom-patch # 작업할 내 브랜치
           fetch-depth: 0    # Rebase를 위해 전체 히스토리를 가져옴
+	  token: ${{ secrets.PAT_TOKEN }} # 이 한 줄을 추가합니다.
 
       - name: Configure Git
         run: |
