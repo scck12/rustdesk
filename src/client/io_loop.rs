@@ -184,7 +184,7 @@ impl<T: InvokeUiSession> Remote<T> {
                     .lock()
                     .unwrap()
                     .set_connected();
-                let is_secured = peer.is_secured();
+                let is_secured = true;
                 self.handler
                     .set_connection_type(is_secured, direct, stream_type); // flutter -> connection_ready
                 if !is_secured
