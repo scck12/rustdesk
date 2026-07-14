@@ -9,6 +9,9 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+permissions:          # <== 이 블록을 새로 추가합니다.
+  contents: write     # <== 릴리스 및 태그를 생성/수정할 수 있는 권한
+
 jobs:
   run-flutter-nightly-build:
     uses: ./.github/workflows/flutter-build.yml
