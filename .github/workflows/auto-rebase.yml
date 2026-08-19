@@ -1,9 +1,13 @@
-name: Auto Rebase Upstream
+name: Rebase on Upstream Release
 
 on:
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: '특정 태그로 강제 rebase (비우면 최신 정식 릴리스)'
+        required: false
 
 permissions:
   contents: write
@@ -12,28 +16,59 @@ jobs:
   rebase:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: custom-patch
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }} # 빌드 트리거를 위한 PAT 토큰
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
 
-      - name: Configure Git
+      - name: Setup
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Add Upstream and Fetch
-        run: |
           git remote add upstream https://github.com/rustdesk/rustdesk.git
-          git fetch upstream master
 
-      - name: Perform Rebase
+      - name: 최신 정식 릴리스 조회
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          git rebase upstream/master
-          
-      - name: Force Push
-        if: success()
+          TAG="${{ inputs.tag }}"
+          [ -z "$TAG" ] && TAG=$(gh api repos/rustdesk/rustdesk/releases/latest -q .tag_name)
+          echo "정식 릴리스: $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: 새 릴리스인지 판별
+        id: check
         run: |
-          git push --force origin custom-patch
+          TAG="${{ steps.rel.outputs.tag }}"
+          git fetch --no-tags upstream "+refs/tags/${TAG}:refs/rd/release"
+          NEW=$(git rev-parse 'refs/rd/release^{commit}')
+          OLD=$(git rev-parse 'upstream-base^{commit}' 2>/dev/null || echo "")
+          echo "new_base=$NEW" >> "$GITHUB_OUTPUT"
+          echo "old_base=$OLD" >> "$GITHUB_OUTPUT"
+          [ "$OLD" = "$NEW" ] && echo "skip=true" >> "$GITHUB_OUTPUT" && echo "이미 $TAG 기반 — 할 일 없음"
+          exit 0
+
+      - name: Rebase
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          OLD="${{ steps.check.outputs.old_base }}"
+          NEW="${{ steps.check.outputs.new_base }}"
+          if [ -z "$OLD" ]; then
+            echo "::error::upstream-base 태그 없음. Bootstrap 워크플로를 먼저 실행하세요."
+            exit 1
+          fi
+          git rebase --onto "$NEW" "$OLD" custom-patch || {
+            git rebase --abort
+            echo "::error::conflict — 수동 개입 필요 (${{ steps.rel.outputs.tag }})"
+            exit 1
+          }
+          git tag -f upstream-base "$NEW"
+
+      - name: Push
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          git push --force-with-lease origin custom-patch
+          git push -f origin upstream-base
