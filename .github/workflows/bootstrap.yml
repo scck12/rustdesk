@@ -60,7 +60,7 @@ jobs:
           echo "기준 태그   : ${{ steps.t.outputs.tag }}"
           echo "현재 베이스 : $(git merge-base custom-patch upstream/master)"
           echo "--- 내 패치 커밋 ---"
-          git log --reverse --no-merges --oneline upstream/master..custom-patch || true
+          git log --reverse --no-merges --format='%h %s' --name-only upstream/master..custom-patch || true
           N=$(git log --reverse --no-merges --pretty=%H upstream/master..custom-patch | wc -l)
           echo "총 ${N}개"
           echo "count=$N" >> "$GITHUB_OUTPUT"
