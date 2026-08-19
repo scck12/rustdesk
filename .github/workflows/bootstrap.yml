@@ -1,0 +1,82 @@
+name: Bootstrap custom-patch
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '기준 릴리스 태그 (비우면 최신 정식 릴리스)'
+        required: false
+      apply:
+        description: '실제 적용. false면 조회만 (dry-run)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: custom-patch
+          fetch-depth: 0
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Setup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/rustdesk/rustdesk.git
+          git fetch upstream master
+          git fetch upstream --tags
+
+      - name: 기준 태그 결정
+        id: t
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          [ -z "$TAG" ] && TAG=$(gh api repos/rustdesk/rustdesk/releases/latest -q .tag_name)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: 탐지 및 재작성
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.t.outputs.tag }}"
+          mapfile -t SHAS < <(git log --reverse --no-merges --pretty=%H upstream/master..custom-patch)
+
+          echo "기준 태그   : $TAG ($(git rev-parse --short "refs/tags/$TAG^{commit}"))"
+          echo "현재 베이스 : $(git merge-base custom-patch upstream/master)"
+          echo "내 패치 커밋 ${#SHAS[@]}개:"
+          git log --reverse --no-merges --oneline upstream/master..custom-patch
+
+          if [ "${{ inputs.apply }}" != "true" ]; then
+            echo "== dry-run 종료. 위 목록이 맞으면 apply 체크하고 재실행 =="
+            exit 0
+          fi
+          if [ "${#SHAS[@]}" -eq 0 ]; then
+            echo "::error::패치 커밋이 0개. 중단."
+            exit 1
+          fi
+
+          BK="backup/custom-patch-$(date +%Y%m%d-%H%M%S)"
+          git branch "$BK"
+          git checkout -B custom-patch "refs/tags/$TAG"
+
+          for S in "${SHAS[@]}"; do
+            if ! git cherry-pick -x "$S"; then
+              if git diff --cached --quiet && git diff --quiet; then
+                echo "이미 upstream에 반영됨 → skip: $S"
+                git cherry-pick --skip
+              else
+                git cherry-pick --abort
+                echo "::error::cherry-pick conflict at $S — 수동 처리 필요"
+                exit 1
+              fi
+            fi
+          done
+
+          git tag -f upstream-base "refs/tags/$TAG^{commit}"
+          git push -f origin custom-patch upstream-base "$BK"
